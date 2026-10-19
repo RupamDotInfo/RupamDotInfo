@@ -30,6 +30,7 @@ Static-site builds produce two related outputs: the pages actually prerendered t
 - **Tests:** Node's built-in test runner
 - **License:** MIT
 - **Repository:** [RupamDotInfo/prerender-audit](https://github.com/RupamDotInfo/prerender-audit)
+- **Release:** [v1.0.0](https://github.com/RupamDotInfo/prerender-audit/releases/tag/v1.0.0) — GitHub only; not published to npm
 
 The tool is intentionally scoped. It checks files rather than making live HTTP requests, supports flat HTML output paths, does not recursively fetch sitemap indexes, and does not validate the contents of each HTML page. Those limitations are documented rather than hidden.
 
@@ -87,7 +88,8 @@ These are technologies used in current or completed projects, not a claim of equ
 
 - **Website:** [rupam.info](https://rupam.info)
 - **Software portfolio:** [software.acadefy.org](https://software.acadefy.org)
-- **Public source:** [prerender-audit](https://github.com/RupamDotInfo/prerender-audit)
+- **Public source:** [prerender-audit](https://github.com/RupamDotInfo/prerender-audit) — [v1.0.0 release](https://github.com/RupamDotInfo/prerender-audit/releases/tag/v1.0.0)
+- **LinkedIn:** [rupamdotinfo](https://www.linkedin.com/in/rupamdotinfo/)
 - **X:** [@RupamDotInfo](https://twitter.com/RupamDotInfo)
 
 ---
