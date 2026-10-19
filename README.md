@@ -1,212 +1,91 @@
 # Rupam Bhaduri
 
-**Software Engineer · Product Builder · AI & EdTech**
+**Software Engineer · Product Builder · Rust, Laravel, Vue/TypeScript**
 
-I build software products end to end — from the CMS and publishing pipeline
-behind them, through the APIs, to the accessible front end. My focus is
-engineering that is verifiable: a claim that something works should come with a
-test, a measurement, or a check that runs in CI, and a limitation that is stated
-rather than implied.
+I build software end to end: application architecture, backend services, desktop interfaces, testing and delivery. I care about systems that behave correctly under failure, tests that catch real defects, and releases whose claims can be independently checked.
 
-I am CEO and Founder at **AcadeFy**, where I work across the platform and on
-the developer tooling that ships it.
+My current engineering interests are **systems software, backend/product engineering, cross-platform desktop applications, and software reliability**.
 
----
+## Current projects
 
-## About
-
-The problems I gravitate toward are the unglamorous ones that decide whether a
-product actually works:
-
-- **Content that cannot silently drift from what is served.** A CMS where an
-  edit either reaches the public site exactly as reviewed, or does not reach it
-  at all.
-- **Deployments that cannot quietly ship a broken page.** Publishing pipelines
-  with real verification and a rollback that is actually exercised.
-- **Checks that fail when they should.** A green pipeline that has never been
-  shown to catch anything is indistinguishable from no pipeline.
-- **Accessibility and correctness in the same pass**, not as a later phase.
-
-I care about the failure modes more than the happy path. Most of the work
-below is about a system refusing to do the wrong thing.
-
----
-
-## Selected work
-
-| Project | What it is | Status |
+| Project | Focus | Status |
 |---|---|---|
-| [**prerender-audit**](https://github.com/RupamDotInfo/prerender-audit) | Zero-dependency CLI that checks a static site's sitemap and prerendered output agree | Public, released |
-| **AcadeFy** | Laravel platform and multi-tenant product infrastructure | Private |
-| **AcadeFy Software** | CMS-driven static software catalogue with revision-verified publishing | Private, in production |
+| [**prerender-audit**](https://github.com/RupamDotInfo/prerender-audit) | Zero-dependency Node.js CLI that checks whether sitemap URLs and static prerendered HTML agree | Public source; GitHub release pending |
+| **LanFy** | Rust-based LAN messenger focused on secure local communication and peer discovery | In development; source not public yet |
+| **DownFy** | Cross-platform download manager with a Rust engine and native mobile work | In development; source not public yet |
+| **TorrentFy** | BitTorrent desktop client built around a Rust engine | In development; not release-ready |
+| **OfficeFy** | Desktop productivity suite; current work emphasizes document fidelity and pagination | In development |
+| **AcadeFy** | Education software and multi-tenant SaaS | Private product; separate business track |
 
-The private work is not open source, but the engineering behind it is described
-below and every claim is traceable to a commit or a test.
+The status labels describe the current stage, not a promise of release dates. I prefer to publish a smaller product that holds up under use than to label unfinished work as production-ready.
 
----
+## Public project: prerender-audit
+
+Static-site builds produce two related outputs: the pages actually prerendered to HTML and a sitemap advertising the URLs. When these disagree, a route can appear in the sitemap despite having no generated page behind it.
+
+`prerender-audit` compares those outputs before an artifact is promoted. It reports missing advertised pages, unadvertised prerendered pages, duplicate entries, and malformed or off-origin URLs. An empty sitemap or empty HTML output is **not** accepted as an all-clear.
+
+- **Runtime:** Node.js 18+
+- **Dependencies:** none; uses the Node.js standard library
+- **Tests:** Node's built-in test runner
+- **License:** MIT
+- **Repository:** [RupamDotInfo/prerender-audit](https://github.com/RupamDotInfo/prerender-audit)
+
+The tool is intentionally scoped. It checks files rather than making live HTTP requests, supports flat HTML output paths, does not recursively fetch sitemap indexes, and does not validate the contents of each HTML page. Those limitations are documented rather than hidden.
 
 ## Engineering case studies
 
-Each of these describes a real problem, what made it hard, what I chose, and
-what verified it. Where something remains unresolved, it is stated.
+The following cases describe engineering work in private projects. The associated source code is not public, so these are presented as engineering summaries rather than as independently browsable code samples.
 
-### 1. A silent filter between the CMS and the router
+### 1. A silent boundary between content and routing
 
-**The problem.** I added a new top-level collection to the public content
-payload that the static build reads. The build advertised the new URLs in its
-sitemap and prerendered none of them. Two advertised URLs would have returned
-404.
+A content change caused the sitemap generator to advertise two routes that the static build did not prerender. The cause was a sanitizing function that rebuilt a data object field by field and silently omitted a newly added field. Type checking passed because the declared type was correct; the runtime boundary was not.
 
-**Why it was hard to see.** Two components read the *same* source data through
-different paths. The sitemap generator read the raw payload. The router read
-the same data through a sanitising function that rebuilt the object key by key.
-A key had been added to the payload and to the TypeScript type — but not to the
-sanitiser, which dropped it in silence. Type checking passed, because the type
-was correct. The sanitiser was not part of the type boundary.
+**What changed:** fixed the mapping, added a regression test against the real loader rather than mocking away the faulty function, and verified the test failed before the fix and passed afterward. The generalized pre-promotion check became `prerender-audit`.
 
-**What caught it.** The deployment's post-promotion verification requested every
-sitemap URL and found two returning 404. It refused to promote the artifact and
-restored the previous release. The site was never broken.
+### 2. A CI pipeline that found defects immediately
 
-**The part I'm not proud of.** The test I wrote alongside the feature passed
-throughout. It mocked the loader wholesale — which meant it mocked away the
-exact function that was broken. A test that mocks the thing most likely to be
-wrong proves nothing about it.
+A project had an extensive test suite but no automated CI. The first run exposed a mismatch between the declared PHP constraint and locked dependency requirements. After that was fixed, the next run exposed tests coupled to deployment-host state. The portable test design was corrected rather than weakening the assertions.
 
-**The fix.** One line in the sanitiser, plus a new test file that calls the
-*real* loader against a stubbed CMS response. I verified the new test fails
-against the pre-fix code and passes after, so it actually pins the behaviour
-rather than merely agreeing with it.
+**Lesson:** a suite that passes only on the machines that already work is not a reliable safety net. The pipeline was verified green after the fixes.
 
-**Trade-off.** Detection happened after promotion, at the URL-probe stage, not
-during the build. That is a late place to find it. The underlying generalisable
-lesson — that a sitemap and its prerendered output are two independent outputs
-with nothing forcing them to agree — became
-[`prerender-audit`](https://github.com/RupamDotInfo/prerender-audit), which
-checks the agreement before an artifact is promoted.
+### 3. Correcting a false-positive security finding
 
-### 2. Correcting a security finding that was wrong
+A scanner flagged a test-only sentinel as though it were a live credential. I initially treated the finding as a production blocker, then traced the evidence and found errors in placeholder detection and fingerprint calculation.
 
-**The problem.** An audit flagged a credential-shaped literal committed in a
-deployment script and recommended rotating the production secret before the
-repository was ever pushed. I reported it as a genuine blocker.
+**What changed:** documented the correction, avoided an unjustified production-secret rotation, and strengthened the scanner using synthetic secret patterns. A security finding is a reason to investigate; the evidence should determine the response.
 
-**Why the original finding was wrong.** The literal was the self-evidently
-invalid string `definitely-not-the-secret`, present so the smoke tests could
-assert that the deploy callback *rejects* wrong secrets. Three distinct values
-were in play and only one was live:
+### 4. Publishing with revision verification
 
-| | Length | Accepted by production? |
-|---|---|---|
-| Committed literal | 25 | No — HTTP 401 |
-| Second script copy | 11 | No — HTTP 401 |
-| Live production secret | 64 | Yes — HTTP 200 |
+A private software catalogue separates saving content from explicitly publishing it. The publishing path records the intended revision and checks what is actually served before accepting promotion. A mismatch prevents the new artifact from being treated as successfully published and keeps a rollback path available.
 
-Two measurement errors compounded it. The placeholder check tested a short word
-list that did not contain these strings, so it reported them as non-placeholders.
-A later fingerprint hashed the entire regex match including the header prefix
-rather than the captured value, turning a 25-character string into 42 and making
-it look opaque.
+**Engineering focus:** explicit state transitions, verifiable deployment outcomes, regression tests for the publish boundary, and failure behavior that is exercised rather than merely described.
 
-**What I did.** Verified by fingerprint comparison and by actually calling the
-endpoint, not by re-asserting. Found no rotation was warranted — rotating a
-working production secret to cover a non-secret would have disrupted a live
-publishing pipeline for no benefit. Recorded the correction in the project's own
-known-issues document rather than deleting it.
+## Technologies used in my work
 
-**Then.** Added a dependency-free secret scanner to the repository, with the
-known-safe values allowlisted explicitly rather than by disabling the rule. It
-reports file, line and rule and never echoes a matched value. I proved it works
-by planting six secret shapes and confirming all six are caught.
+- **Systems and desktop:** Rust, Tauri 2, asynchronous programming, SQLite
+- **Web and backend:** PHP, Laravel, Vue 3, TypeScript, JavaScript, Vite
+- **Mobile:** Kotlin, Jetpack Compose
+- **Quality:** automated tests, regression testing, static checks, CI with GitHub Actions
+- **Delivery:** Linux, nginx, systemd, content-driven static generation, revision-verified publishing
 
-**The lesson I keep.** A finding that would change production behaviour has to
-be proven before it acts. "It looks like a secret" is a reason to investigate, not
-a reason to rotate.
+These are technologies used in current or completed projects, not a claim of equal expertise in every item.
 
-### 3. CI that found two real defects on its first runs
+## What I value
 
-**The problem.** A repository with 325 backend tests, 90 frontend tests and a
-type check had no CI at all. Nothing ran automatically. The first push of 29
-commits had no automated verification behind it.
-
-**Run 1 failed on dependency resolution**, not on a test. The workflow used PHP
-8.3 because `composer.json` declared `"php": "^8.3"` — but seventeen locked
-packages required `>=8.4.1`. The declared constraint was simply wrong, so no PHP
-8.3 machine could ever have installed the backend. Corrected to `^8.4`; CI moved
-to PHP 8.5 to match production.
-
-**Run 2 installed cleanly and then failed 4 of 325 tests.** Every one of them
-was coupled to state that exists only on the deploy host: the publication state
-directory, and the application's own SQLite file. The suite passed on my
-machine and on production and could not run anywhere else — precisely backwards
-for a suite that most needs to run in CI.
-
-The fix had its own trap. My first attempt pointed the database guard test at a
-temporary file, which would have made it **assert nothing while passing** — the
-guard deliberately ignores any path that is not the real database. I caught it,
-extracted the decision into a pure predicate, and tested that directly with
-scratch files. The earlier weaker version was reverted rather than shipped.
-
-**Run 3: all three jobs green.** Two genuine defects found in the first two
-executions of a pipeline that had never run.
-
-### 4. Publishing that refuses to ship something wrong
-
-The catalogue publishes through a CMS rather than SQL or a seed script, and
-separates saving from publishing: an edit is stored privately, reviewed, and
-only an explicit publish control rebuilds the public site. That separation is
-enforced by tests that assert saving dispatches **zero** deployment runs, and
-that the publish control dispatches exactly one.
-
-Every deployment is recorded with its intended revision, the revision verified
-at the origin, and the revision in the live manifest. Promotion is conditional
-on those agreeing. When they disagree, the artifact is not promoted and the
-previous release is restored — a path that is exercised regularly enough to be
-trusted rather than theoretical.
-
----
-
-## Technology
-
-Used in the work described here, not aspirationally:
-
-**Backend** — PHP 8.4+, Laravel, SQLite, Eloquent, Filament, Livewire,
-PHPUnit/Pest, Composer
-
-**Frontend** — Vue 3, TypeScript, Vite, `vite-ssg`, Tailwind CSS, Vitest
-
-**Platform** — Linux, nginx, systemd, Cloudflare, GitHub Actions
-
-**Practices** — content-driven static generation, revision-verified
-publishing with rollback, WCAG 2.1 AA accessibility, contract-shaped regression
-tests, secret scanning in CI
-
----
-
-## Current focus
-
-- Extending the development journal on the software catalogue so in-progress
-  work is visible without overclaiming readiness
-- Reducing the time between a content edit and a verified, published change
-- Turning the incidental deploy scripts in that project into one documented path
-
----
+- Tests that exercise the real failure boundary.
+- Errors that fail clearly instead of producing false success.
+- Small, reviewable changes with reproducible verification.
+- Honest documentation of what a tool does not support.
+- Product decisions guided by reliability and real user needs.
 
 ## Links
 
-- **Website** — [rupam.info](https://rupam.info)
-- **Software portfolio** — [software.acadefy.org](https://software.acadefy.org)
-- **Public code** — [github.com/RupamDotInfo/prerender-audit](https://github.com/RupamDotInfo/prerender-audit)
-- **X / Twitter** — [@RupamDotInfo](https://twitter.com/RupamDotInfo)
+- **Website:** [rupam.info](https://rupam.info)
+- **Software portfolio:** [software.acadefy.org](https://software.acadefy.org)
+- **Public source:** [prerender-audit](https://github.com/RupamDotInfo/prerender-audit)
+- **X:** [@RupamDotInfo](https://twitter.com/RupamDotInfo)
 
 ---
 
-## A note on claims
-
-Every technical claim above is traceable to a commit, a test, or a measurement
-in the private projects. Where I could not verify something, I have said so —
-including the two things I had to correct in my own audit, and the tooling gap
-that remains.
-
-I would rather show a smaller body of work that holds up under inspection than
-a longer list that does not.
+I would rather show a smaller body of work that withstands scrutiny than a longer list of claims that does not.
