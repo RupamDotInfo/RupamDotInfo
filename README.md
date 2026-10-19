@@ -10,7 +10,7 @@ My current engineering interests are **systems software, backend/product enginee
 
 | Project | Focus | Status |
 |---|---|---|
-| [**prerender-audit**](https://github.com/RupamDotInfo/prerender-audit) | Zero-dependency Node.js CLI that checks whether sitemap URLs and static prerendered HTML agree | Public source; GitHub release pending |
+| [**prerender-audit**](https://github.com/RupamDotInfo/prerender-audit) | Zero-dependency Node.js CLI that checks whether sitemap URLs and static prerendered HTML agree | Public source; released as [v1.0.0](https://github.com/RupamDotInfo/prerender-audit/releases/tag/v1.0.0) on GitHub. Not published to npm. |
 | **LanFy** | Rust-based LAN messenger focused on secure local communication and peer discovery | In development; source not public yet |
 | **DownFy** | Cross-platform download manager with a Rust engine and native mobile work | In development; source not public yet |
 | **TorrentFy** | BitTorrent desktop client built around a Rust engine | In development; not release-ready |
@@ -42,6 +42,10 @@ The following cases describe engineering work in private projects. The associate
 A content change caused the sitemap generator to advertise two routes that the static build did not prerender. The cause was a sanitizing function that rebuilt a data object field by field and silently omitted a newly added field. Type checking passed because the declared type was correct; the runtime boundary was not.
 
 **What changed:** fixed the mapping, added a regression test against the real loader rather than mocking away the faulty function, and verified the test failed before the fix and passed afterward. The generalized pre-promotion check became `prerender-audit`.
+
+**The tool then failed its own first CI run, in the way that mattered.** Unit tests import the source module and passed, but a package-level check that packs the tarball, installs it and runs the *installed* command returned success on a deliberately broken build. The cause was the guard that stops the CLI executing when imported as a library: it compared the module name against `process.argv[1]`, which never matches on Linux or macOS, where npm installs a bin entry as a symlink. The command did nothing and exited 0.
+
+That is the worst available failure for a safety check — a CI step running it would have passed on every run, including against broken builds, which is worse than having no check. It is now covered by a test that executes the CLI through a symlink, and the reason for that package-level test is precisely that unit tests alone would never have seen it.
 
 ### 2. A CI pipeline that found defects immediately
 
